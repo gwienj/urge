@@ -6,7 +6,6 @@ import (
 	"strings"
 	"net"
 	"crypto/md5"
-	//"encoding/json"
 )
 
 const (
@@ -152,7 +151,7 @@ func Server(f cb, m int) {
 func handleConnection(conn net.Conn, f cb, vty chan bool) {
 	defer conn.Close()
 
-	fmt.Println("client connected")
+	//fmt.Println("client connected")
 
 	select {
 	case <- vty:
@@ -184,5 +183,5 @@ func handleConnection(conn net.Conn, f cb, vty chan bool) {
 		conn.Close()
 	}	
 	
-	fmt.Println("client closed")	
+	//fmt.Println("client closed")	
 }
