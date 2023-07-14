@@ -10,6 +10,7 @@ import (
 
 const (
 	cServerPort = 5291
+	cMaxMsgLen = 2048
 )
 
 type cb func([]byte) ([]byte, bool)
@@ -35,7 +36,7 @@ func Client() {
 	var conn net.Conn
 	var err error
 	var login bool = false
-	var prompt, cmd, target, param1, param2, param3, param4, param5, param6 string
+	var prompt string
 
 	fmt.Println("welcome to urge console (gotoo ver1.0 komi 2023)")
 	for {
@@ -43,7 +44,9 @@ func Client() {
 			fmt.Print(prompt)
 		} else {
 			fmt.Print("gotoo# ")
-		}		
+		}
+
+		var cmd, target, param1, param2, param3, param4, param5, param6 string		
 		n, _ := fmt.Scanln(&cmd, &target, &param1, &param2, &param3, &param4, &param5, &param6)
 		switch cmd {
 		case "help":
@@ -56,6 +59,7 @@ func Client() {
 
 				conn, err = net.DialTimeout("tcp", fmt.Sprintf("%s:%d", target, cServerPort), 3*time.Second)
 				if err != nil {
+					login = false
 					fmt.Println("login failed")
 				} else {
 					login = true
@@ -63,25 +67,16 @@ func Client() {
 
 					conn.Write([]byte(fmt.Sprintf("login %s %s", param1, Sharekey(param1, param2))))
 
-					err = conn.SetReadDeadline(time.Now().Add(3*time.Second))
-					if err != nil {
-						fmt.Println(err)
-					}
+					conn.SetReadDeadline(time.Now().Add(3*time.Second))
 
-					buffer := make([]byte, 1024)
+					buffer := make([]byte, cMaxMsgLen)
 					_, e := conn.Read(buffer)
 					if e != nil {
 						conn.Close()
 						login = false
 						fmt.Println("no response")
-					} else {
-						res := Buffer2String(buffer)
-						if res == "terminateconnection" {
-							conn.Close()
-							login = false														
-						} else {
-							fmt.Println(res)
-						}
+					} else {						
+						fmt.Println(Buffer2String(buffer))						
 					}					
 				}				
 			} else {
@@ -102,22 +97,37 @@ func Client() {
 		default:
 			if login {
 				msg := strings.Trim(fmt.Sprintf("%s %s %s %s %s %s %s %s", cmd, target, param1, param2, param3, param4, param5, param6), " ")
-				conn.Write([]byte(msg))
+				if len(msg) > 0 {
+					conn.Write([]byte(msg))
 
-				err = conn.SetReadDeadline(time.Now().Add(3*time.Second))
-				if err != nil {
-					fmt.Println(err)
-				}
+					conn.SetReadDeadline(time.Now().Add(5*time.Second))
 
-				buffer := make([]byte, 1024)
-				_, e := conn.Read(buffer)
-				if e != nil {
-					conn.Close()
-					login = false
-					fmt.Println("no response")
+					buffer := make([]byte, cMaxMsgLen)
+					_, e := conn.Read(buffer)
+
+					if e != nil {
+						conn.Close()
+						login = false
+						fmt.Println("no response")
+					} else {
+						fmt.Println(Buffer2String(buffer))
+					}
 				} else {
-					fmt.Printf("%s\n",buffer)
-				}
+					conn.SetReadDeadline(time.Now().Add(400*time.Millisecond))
+
+					buffer := make([]byte, cMaxMsgLen)
+					_, e := conn.Read(buffer)
+
+					if e == nil {
+						res := Buffer2String(buffer)
+						if res == "terminateconnection" {
+							conn.Close()
+							login = false														
+						} else {
+							fmt.Println(res)
+						}
+					}
+				}	
 			}
 		}
 	}
@@ -156,7 +166,7 @@ func handleConnection(conn net.Conn, f cb, vty chan bool) {
 	select {
 	case <- vty:
 		for {
-			buffer := make([]byte, 1024)
+			buffer := make([]byte, cMaxMsgLen)
 			_, re := conn.Read(buffer)
 			if re != nil {
 				break
